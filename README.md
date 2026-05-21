@@ -65,6 +65,98 @@ az keyvault secret show --vault-name <kv-name> --name vm-password --query value 
 
 ---
 
+## Finding the Right VM Image
+
+Before deploying, you need to know the exact **Publisher → Offer → SKU** chain for your desired OS image. Use the Azure CLI steps below to discover and confirm these values.
+
+---
+
+### 🪟 Windows 11 (Desktop)
+
+#### Step 1 — Find the Publisher
+Search for publishers whose name contains `Windows`:
+
+```powershell
+az vm image list-publishers --location centralindia --query "[?contains(name, 'Windows')].name" --output table
+```
+
+**Example output:** `MicrosoftWindowsServer`, `microsoftwindowsdesktop`, `MicrosoftSQLServer`
+
+> For a client desktop (Windows 11), use **`microsoftwindowsdesktop`** (not `MicrosoftWindowsServer`).
+
+#### Step 2 — Find the Offer
+List all product offers from that publisher:
+
+```powershell
+az vm image list-offers --location centralindia --publisher microsoftwindowsdesktop --output table
+```
+
+**Example output:** `windows-11`, `windows-11-preview`, `windows-10`
+
+> Use **`windows-11`** as the offer string.
+
+#### Step 3 — Find the SKU
+List available editions (SKUs) under that offer:
+
+```powershell
+az vm image list-skus --location centralindia --publisher microsoftwindowsdesktop --offer windows-11 --output table
+```
+
+**Example output:** `win11-24h2-pro`, `win11-25h2-pro`, `win11-25h2-ent`
+
+> Use **`win11-25h2-pro`** (or whichever edition fits your needs).
+
+---
+
+### 🐧 Ubuntu / Linux (Canonical)
+
+#### Step 1 — Find the Publisher
+Search for publishers whose name contains `Canonical` or `Ubuntu`:
+
+```powershell
+az vm image list-publishers --location centralindia --query "[?contains(name, 'Canonical') || contains(name, 'canonical')].name" --output table
+```
+
+**Example output:** `Canonical`
+
+> The official Ubuntu publisher is **`Canonical`**.
+
+#### Step 2 — Find the Offer
+List all product offers from Canonical:
+
+```powershell
+az vm image list-offers --location centralindia --publisher Canonical --output table
+```
+
+**Example output:** `0001-com-ubuntu-server-focal`, `0001-com-ubuntu-server-jammy`, `ubuntu-24_04-lts`
+
+> Use **`ubuntu-24_04-lts`** for Ubuntu 24.04 LTS.
+
+#### Step 3 — Find the SKU
+List available SKUs under that offer:
+
+```powershell
+az vm image list-skus --location centralindia --publisher Canonical --offer ubuntu-24_04-lts --output table
+```
+
+**Example output:** `server`, `server-gen2`, `cvm`
+
+> Use **`server`** for a standard Ubuntu 24.04 LTS VM, or **`server-gen2`** for Generation 2.
+
+---
+
+### Using the Image in Your Bicep Parameter File
+
+Once you have the three values, update `production/parameters/prod.bicepparam`:
+
+```bicep
+param imagePublisher = 'Canonical'           // or 'microsoftwindowsdesktop'
+param imageOffer     = 'ubuntu-24_04-lts'    // or 'windows-11'
+param imageSku       = 'server'              // or 'win11-25h2-pro'
+```
+
+---
+
 ## Deploying
 
 A **single command** deploys everything — Key Vault, password secret, VNet lookup, and VM:

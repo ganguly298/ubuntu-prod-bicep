@@ -5,15 +5,20 @@ param username string
 param password string
 param subnetId string
 
+var pipSuffix = uniqueString(resourceGroup().id, deployment().name)
+
 
 resource nic 'Microsoft.Network/networkInterfaces@2021-08-01' = {
-  name: '${name}-nic'
+  name: '${name}-nic-${pipSuffix}'
   location: location
   properties: {
     ipConfigurations: [
       {
         name: 'ipconfig1'
         properties: {
+          publicIPAddress: {
+            id: publicIP.id
+          }
           subnet: {
             id: subnetId
           }
@@ -21,6 +26,16 @@ resource nic 'Microsoft.Network/networkInterfaces@2021-08-01' = {
         }
       }
     ]
+  }
+}
+resource publicIP 'Microsoft.Network/publicIPAddresses@2021-08-01' = {
+  name: '${name}-pip-${pipSuffix}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
   }
 }
 
@@ -33,9 +48,9 @@ resource vm 'Microsoft.Compute/virtualMachines@2021-07-01' = {
     }
     storageProfile: {
       imageReference: {
-        publisher: 'canonical'
-        offer: 'ubuntu-24_04-lts'
-        sku: 'server'
+        publisher: 'microsoftwindowsdesktop'
+        offer: 'windows-11'
+        sku: 'win11-25h2-pro'
         version: 'latest'
       }
       osDisk: {

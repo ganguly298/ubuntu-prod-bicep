@@ -3,7 +3,7 @@ param location string = resourceGroup().location
 param username string
 param existingVnetName string
 param existingSubnetName string
-param kvName string = 'kv-${uniqueString(resourceGroup().id,deployment().name)}' // Generate a unique KV name based on resource group ID
+param kvName string = 'myKeyvault-296a'
 
 
 var VMname = 'vm-${name}'
@@ -18,9 +18,10 @@ module kvModule './modules/keyvault.bicep' = {
   }
 }
 
-// 2. Store generated password into Key Vault
+// 2. Store generated password into Key Vault (secret name is per-VM to avoid overwriting)
 resource kvSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
-  name: '${kvName}/vm-password'
+  parent: kv
+  name: VMname
   properties: {
     value: generatedPassword
   }
@@ -47,7 +48,7 @@ module vmModule './modules/vm.bicep' = {
     name: VMname
     location: location
     username: username
-    password: kv.getSecret('vm-password')
+    password: kv.getSecret(VMname)
     subnetId: vnetModule.outputs.subnetId
   }
   dependsOn: [kvSecret]
