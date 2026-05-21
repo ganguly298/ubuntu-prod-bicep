@@ -1,6 +1,6 @@
 # Azure VM Bicep Deployment
 
-Deploys an Ubuntu 24.04 LTS Virtual Machine (`Standard_B2s_v2`) into an **existing** Virtual Network and Subnet using Azure Bicep.
+Deploys an Ubuntu 24.04 LTS Virtual Machine (`Standard_B2s_v2`) into an **existing** Virtual Network and Subnet using Azure Bicep. A Key Vault is automatically created and the VM password is auto-generated, stored in Key Vault, and referenced from there — never hardcoded anywhere.
 
 ---
 
@@ -19,7 +19,7 @@ Deploys an Ubuntu 24.04 LTS Virtual Machine (`Standard_B2s_v2`) into an **existi
 
 ## Existing VNet & Subnet Requirement
 
-This deployment does **not** create a new VNet. You must have an existing VNet and Subnet. Update the values in `production/parameters/vm.bicepparam` to match your environment:
+This deployment does **not** create a new VNet. You must have an existing VNet and Subnet. Update the values in `production/parameters/prod.bicepparam` to match your environment:
 
 ```bicep
 param existingVnetName   = 'JENKINS-VNET'   // your VNet name
@@ -36,60 +36,71 @@ The `vnet.bicep` module looks up the subnet ID from the existing resources at de
 bicep-test/
 ├── README.md
 └── production/
-    ├── main.bicep                    # Entry point — wires modules together
+    ├── main.bicep                    # Entry point — wires all modules together
     ├── modules/
     │   ├── vm.bicep                  # Creates NIC and Virtual Machine
-    │   └── vnet.bicep                # References existing VNet, outputs subnet ID
+    │   ├── vnet.bicep                # References existing VNet, outputs subnet ID
+    │   └── keyvault.bicep            # Deploys Azure Key Vault
     └── parameters/
-        └── vm.bicepparam             # Parameter values (password via env variable)
+        └── prod.bicepparam           # All parameter values for the deployment
 ```
 
 ---
 
-## How to Supply the Password
+## How the Password Works
 
-The admin password is **never stored in any file**. It is read from an environment variable at deploy time.
+The password is **auto-generated** at deploy time using `uniqueString()` — you never set it manually. The flow is:
 
-**Step 1 — Set the environment variable:**
+1. `main.bicep` generates the password as a variable
+2. Key Vault is deployed via `keyvault.bicep`
+3. Password is stored as secret `vm-password` in Key Vault
+4. VM module reads the password using `kv.getSecret('vm-password')` — never from the variable directly
 
-PowerShell:
-```powershell
-$env:VM_PASSWORD = "YourSecurePassword123!"
-```
-
-Bash / Azure Cloud Shell:
+To retrieve the password after deployment:
 ```bash
-export VM_PASSWORD="YourSecurePassword123!"
+az keyvault secret show --vault-name <kv-name> --name vm-password --query value -o tsv
 ```
 
-**Step 2 — Deploy:**
-```powershell
-az deployment group create `
-  --resource-group jenkins-rg `
-  --template-file production/main.bicep `
-  --parameters production/parameters/vm.bicepparam
+> The KV name is auto-generated too: `kv-<uniqueString>`. Find it in the Azure Portal under `jenkins-rg`.
+
+---
+
+## Deploying
+
+A **single command** deploys everything — Key Vault, password secret, VNet lookup, and VM:
+
+```bash
+az deployment group create \
+  --resource-group jenkins-rg \
+  --template-file production/main.bicep \
+  --parameters production/parameters/prod.bicepparam
 ```
 
-> The `vm.bicepparam` file reads the password via `readEnvironmentVariable('VM_PASSWORD')`, so the environment variable must be set in the same terminal session before deploying.
+### Deploy order (handled automatically by Bicep)
+1. Key Vault is created (`keyvault.bicep`)
+2. Generated password is stored as `vm-password` secret in KV
+3. Existing VNet/Subnet is resolved (`vnet.bicep`)
+4. VM is created — password fetched via `kv.getSecret('vm-password')` (`vm.bicep`)
 
 ---
 
 ## Parameters Reference
 
-| Parameter | Source | Description |
-|-----------|--------|-------------|
-| `name` | `parameters/vm.bicepparam` | VM name (e.g. `worker-02-vm`) |
-| `username` | `parameters/vm.bicepparam` | Admin username (e.g. `saurav`) |
-| `password` | Environment variable `VM_PASSWORD` | Admin password — never hardcoded |
-| `existingVnetName` | `parameters/vm.bicepparam` | Name of the existing VNet |
-| `existingSubnetName` | `parameters/vm.bicepparam` | Name of the existing Subnet |
+| Parameter | File | Description |
+|-----------|------|-------------|
+| `name` | `prod.bicepparam` | VM base name — actual VM name becomes `vm-<name>` |
+| `username` | `prod.bicepparam` | Admin username (e.g. `saurav`) |
+| `existingVnetName` | `prod.bicepparam` | Name of the existing VNet |
+| `existingSubnetName` | `prod.bicepparam` | Name of the existing Subnet |
+| `kvName` | `main.bicep` (auto) | KV name — auto-generated via `uniqueString()` |
 | `location` | `main.bicep` (default) | Defaults to the resource group's location |
+| `password` | Auto-generated + KV | Never set manually — generated and stored in KV |
 
 ---
 
 ## Password Requirements (Azure Policy)
 
-The password must satisfy Azure's complexity rules:
+The auto-generated password already satisfies Azure's complexity rules:
 - At least **12 characters**
-- Must contain: **uppercase**, **lowercase**, **digit**, and **special character**
-- Must not contain the username
+- Contains **uppercase**, **lowercase**, **digit**, and **special character**
+- Does not contain the username
