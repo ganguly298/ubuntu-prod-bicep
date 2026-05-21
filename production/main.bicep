@@ -1,11 +1,36 @@
-param name string
+param name string    
 param location string = resourceGroup().location
 param username string
-@secure()
-param password string
 param existingVnetName string
 param existingSubnetName string
+param kvName string = 'kv-${uniqueString(resourceGroup().id,deployment().name)}' // Generate a unique KV name based on resource group ID
 
+
+var VMname = 'vm-${name}'
+var generatedPassword = 'Pwd-${uniqueString(resourceGroup().id, deployment().name)}1!'
+
+// 1. Deploy Key Vault
+module kvModule './modules/keyvault.bicep' = {
+  name: 'kv-deployment'
+  params: {
+    kvName: kvName
+    location: location
+  }
+}
+
+// 2. Store generated password into Key Vault
+resource kvSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+  name: '${kvName}/vm-password'
+  properties: {
+    value: generatedPassword
+  }
+  dependsOn: [kvModule]
+}
+
+// 3. Reference existing KV to use getSecret()
+resource kv 'Microsoft.KeyVault/vaults@2023-02-01' existing = {
+  name: kvName
+}
 
 module vnetModule './modules/vnet.bicep' = {
   name: 'vnet-deployment'
@@ -15,13 +40,15 @@ module vnetModule './modules/vnet.bicep' = {
   }
 }
 
+// 4. VM reads password directly from Key Vault — not from the variable
 module vmModule './modules/vm.bicep' = {
   name: 'vm-deployment'
   params: {
-    name: name
+    name: VMname
     location: location
     username: username
-    password: password
+    password: kv.getSecret('vm-password')
     subnetId: vnetModule.outputs.subnetId
   }
+  dependsOn: [kvSecret]
 }
