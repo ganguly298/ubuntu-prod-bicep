@@ -69,11 +69,17 @@ az keyvault secret show --vault-name <kv-name> --name vm-password --query value 
 
 A **single command** deploys everything — Key Vault, password secret, VNet lookup, and VM:
 
-```bash
-az deployment group create \
-  --resource-group jenkins-rg \
-  --template-file production/main.bicep \
+**PowerShell (multi-line):**
+```powershell
+az deployment group create `
+  --resource-group jenkins-rg `
+  --template-file production/main.bicep `
   --parameters production/parameters/prod.bicepparam
+```
+
+**One-liner:**
+```bash
+az deployment group create --resource-group jenkins-rg --template-file production/main.bicep --parameters production/parameters/prod.bicepparam --name <uniquename>
 ```
 
 ### Deploy order (handled automatically by Bicep)
