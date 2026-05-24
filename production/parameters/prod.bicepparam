@@ -1,7 +1,9 @@
 using '../main.bicep'
 
-param name = 'worker-03-vm'
+param name = 'worker-09-vm'
 param username = 'saurav'
 
-param existingVnetName = 'JENKINS-VNET'  // Change to match your existing VNet
-param existingSubnetName = 'default'     // Change to match your existing Subnet
+param vnetName = 'JENKINS-VNET'
+param subnetName = 'default'
+param vnetAddressPrefix = '10.0.0.0/16'
+param subnetAddressPrefix = '10.0.0.0/24'
