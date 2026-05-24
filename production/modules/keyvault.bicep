@@ -13,6 +13,13 @@ param skuName string = 'standard'
 @maxValue(90)
 param softDeleteRetentionInDays int = 7
 
+@description('Name of the VM — used as the secret name in Key Vault.')
+param vmName string
+
+@description('Password value to store as a secret in Key Vault.')
+@secure()
+param generatedPassword string
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
   name: kvName
   location: location
@@ -28,6 +35,15 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
     enabledForDeployment: false
     enabledForDiskEncryption: false
     enabledForTemplateDeployment: true // Allows ARM/Bicep to read secrets during deployment
+  }
+}
+
+// Store the VM password as a secret in the Key Vault
+resource kvSecret 'Microsoft.KeyVault/vaults/secrets@2023-02-01' = {
+  parent: keyVault
+  name: 'pass-${vmName}'
+  properties: {
+    value: generatedPassword
   }
 }
 
